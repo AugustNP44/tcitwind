@@ -23,6 +23,11 @@
     .wind-table .arrow {
       font-size: 1.1rem;
     }
+    .divider {
+      height: 1px;
+      background-color: #ccc;
+      margin: 12px 0;
+    }
   </style>
 </head>
 <body class="bg-blue-50 p-4">
@@ -35,12 +40,12 @@
         <div class="text-center text-gray-700 text-lg">
           <div class="font-semibold">🌪️ TCIT - CM3:</div>
           <span id="windSpeedCM3" class="font-bold">--</span> m/s (<span id="windKnotsCM3" class="font-bold">--</span> knots)
-          <div class="mt-1">🧭 <span id="windDirectionCM3">--</span> <span class="arrow" id="arrowCM3">⬆️</span></div>
+          <div class="mt-1">🧭 <span id="windDirectionCM3">--</span> <span class="arrow" id="arrowCM3">⬆️</span> <span id="windDirLabelCM3"></span></div>
         </div>
         <div class="text-center text-gray-700 text-lg">
           <div class="font-semibold">🌪️ TCTT - CM4:</div>
           <span id="windSpeedCM4" class="font-bold">--</span> m/s (<span id="windKnotsCM4" class="font-bold">--</span> knots)
-          <div class="mt-1">🧭 <span id="windDirectionCM4">--</span> <span class="arrow" id="arrowCM4">⬆️</span></div>
+          <div class="mt-1">🧭 <span id="windDirectionCM4">--</span> <span class="arrow" id="arrowCM4">⬆️</span> <span id="windDirLabelCM4"></span></div>
         </div>
       </div>
       <canvas id="chartCombined" class="w-full h-32 mt-4"></canvas>
@@ -52,18 +57,9 @@
 
     <!-- Open Meteo Forecast Table -->
     <div>
-      <h2 class="text-xl font-semibold text-green-600 text-center">Wind Forecast 24h-Open Meteo</h2>
-      <div class="overflow-x-auto">
-        <table class="wind-table table-auto w-full mt-2 text-xs">
-          <thead>
-            <tr id="forecastHours" class="font-semibold text-gray-700"></tr>
-          </thead>
-          <tbody>
-            <tr id="forecastSpeeds"></tr>
-            <tr id="forecastDirections"></tr>
-            <tr id="forecastArrows"></tr>
-          </tbody>
-        </table>
+      <h2 class="text-xl font-semibold text-green-600 text-center">24h Wind Forecast - Open Meteo</h2>
+      <div class="overflow-x-auto space-y-6">
+        <div id="openMeteoTables"></div>
       </div>
       <div class="text-center text-xs text-gray-400 mt-2">
         🔁 Auto refresh in 10s<br>
@@ -71,7 +67,6 @@
       </div>
     </div>
   </div>
-
 <script>
 function getBeaufortColor(speed) {
   if (speed < 0.3) return 'gray';
@@ -85,12 +80,34 @@ function getBeaufortColor(speed) {
   if (speed < 20.8) return 'crimson';
   return 'maroon';
 }
-
 function getArrowFromDeg(deg) {
   const arrows = ['⬇️','↙️','⬅️','↖️','⬆️','↗️','➡️','↘️'];
   return arrows[Math.round(deg / 45) % 8];
 }
-
+function getDirectionLabel(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+function createForecastTable(times, speeds, dirs) {
+  const segments = [0, 8, 16];
+  return segments.map(start => {
+    const end = start + 8;
+    const hours = times.slice(start, end).map(t => `<td>${t.slice(11, 16)}</td>`).join('');
+    const speedCells = speeds.slice(start, end).map(s => `<td style="color:${getBeaufortColor(s)}">${s.toFixed(1)}</td>`).join('');
+    const dirNums = dirs.slice(start, end).map(d => `<td>${Math.round(d)}°</td>`).join('');
+    const arrows = dirs.slice(start, end).map(d => `<td><span class="arrow">${getArrowFromDeg(d)}</span></td>`).join('');
+    return `
+      <table class="wind-table table-auto w-full mt-2 text-xs">
+        <thead><tr class="font-semibold text-gray-700">${hours}</tr></thead>
+        <tbody>
+          <tr>${speedCells}</tr>
+          <tr>${dirNums}</tr>
+          <tr>${arrows}</tr>
+        </tbody>
+      </table>
+      <div class="divider"></div>`;
+  }).join('');
+}
 function fetchOpenMeteoTable() {
   fetch("https://api.open-meteo.com/v1/forecast?latitude=10.521978&longitude=107.014553&hourly=wind_speed_10m,wind_direction_10m&timezone=Asia%2FBangkok")
     .then(res => res.json())
@@ -98,44 +115,21 @@ function fetchOpenMeteoTable() {
       const times = data.hourly.time.slice(0, 24);
       const speeds = data.hourly.wind_speed_10m.slice(0, 24).map(kmh => (kmh * 0.539957));
       const dirs = data.hourly.wind_direction_10m.slice(0, 24);
-
-      const hours = times.map(t => `<td>${t.slice(11, 16)}</td>`).join('');
-      const speedCells = speeds.map(s => `<td style="color:${getBeaufortColor(s)}">${s.toFixed(1)}</td>`).join('');
-      const dirNums = dirs.map(d => `<td>${Math.round(d)}°</td>`).join('');
-      const arrows = dirs.map(d => `<td><span class="arrow">${getArrowFromDeg(d)}</span></td>`).join('');
-
-      document.getElementById('forecastHours').innerHTML = hours;
-      document.getElementById('forecastSpeeds').innerHTML = speedCells;
-      document.getElementById('forecastDirections').innerHTML = dirNums;
-      document.getElementById('forecastArrows').innerHTML = arrows;
+      document.getElementById('openMeteoTables').innerHTML = createForecastTable(times, speeds, dirs);
       document.getElementById('infoMeteo').innerText = 'Data updated at: ' + new Date().toLocaleTimeString();
     });
 }
-
 const chartCombined = new Chart(document.getElementById('chartCombined').getContext('2d'), {
   type: 'line',
   data: {
     labels: [],
     datasets: [
-      {
-        label: 'CM3 (m/s)',
-        data: [],
-        borderColor: 'blue',
-        backgroundColor: 'rgba(0,0,255,0.1)',
-        fill: true
-      },
-      {
-        label: 'CM4 (m/s)',
-        data: [],
-        borderColor: 'green',
-        backgroundColor: 'rgba(0,255,0,0.1)',
-        fill: true
-      }
+      { label: 'CM3 (m/s)', data: [], borderColor: 'blue', backgroundColor: 'rgba(0,0,255,0.1)', fill: true },
+      { label: 'CM4 (m/s)', data: [], borderColor: 'green', backgroundColor: 'rgba(0,255,0,0.1)', fill: true }
     ]
   },
   options: { scales: { y: { beginAtZero: true } } }
 });
-
 const cm3 = {
   speedUrl: "https://webapi.ubibot.com/channels/72158?account_key=8fbe832ef652822c81af5418b0d243f2",
   dirUrl:   "https://webapi.ubibot.com/channels/72158?account_key=8fbe832ef652822c81af5418b0d243f2",
@@ -143,7 +137,6 @@ const cm3 = {
   dirField: "field8",
   correctDirection: false
 };
-
 const cm4 = {
   speedUrl: "https://webapi.ubibot.com/channels/65717?account_key=52389a10003fb9b280cb3b47f86a21b5",
   dirUrl:   "https://webapi.ubibot.com/channels/72880?account_key=52389a10003fb9b280cb3b47f86a21b5",
@@ -151,7 +144,6 @@ const cm4 = {
   dirField: "field8",
   correctDirection: true
 };
-
 function fetchWindData(station, suffix, datasetIndex) {
   fetch(station.speedUrl)
     .then(res => res.json())
@@ -168,7 +160,6 @@ function fetchWindData(station, suffix, datasetIndex) {
       document.getElementById(`windKnots${suffix}`).innerText = knots.toFixed(1);
       document.getElementById(`windKnots${suffix}`).style.color = level;
       document.getElementById('infoCombined').innerText = `Data updated at: ${now}`;
-
       chartCombined.data.labels.push(now);
       chartCombined.data.datasets[datasetIndex].data.push(speed);
       if (chartCombined.data.labels.length > 20) {
@@ -178,7 +169,6 @@ function fetchWindData(station, suffix, datasetIndex) {
       }
       chartCombined.update();
     });
-
   fetch(station.dirUrl)
     .then(res => res.json())
     .then(json => {
@@ -187,15 +177,14 @@ function fetchWindData(station, suffix, datasetIndex) {
       if (station.correctDirection) dir = (dir + 180) % 360;
       document.getElementById(`windDirection${suffix}`).innerText = `${Math.round(dir)}°`;
       document.getElementById(`arrow${suffix}`).style.transform = `rotate(${(dir + 180) % 360}deg)`;
+      document.getElementById(`windDirLabel${suffix}`).innerText = getDirectionLabel(dir);
     });
 }
-
 function updateAll() {
   fetchWindData(cm3, 'CM3', 0);
   fetchWindData(cm4, 'CM4', 1);
   fetchOpenMeteoTable();
 }
-
 setInterval(updateAll, 10000);
 updateAll();
 </script>

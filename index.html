@@ -20,9 +20,6 @@
       font-size: 0.75rem;
       padding: 2px;
     }
-    .wind-table .arrow {
-      font-size: 1.1rem;
-    }
     .divider {
       height: 1px;
       background-color: #ccc;
@@ -62,7 +59,7 @@
         <div id="openMeteoTables"></div>
       </div>
       <div class="text-center text-xs text-gray-400 mt-2">
-        🔁 Auto refresh in 10s (source: Open Meteo)<br>
+        🔁 Auto refresh in 10s (source: open-meteo.com)<br>
         <span id="infoMeteo" class="info-text">Data updated at: --</span>
       </div>
     </div>
@@ -80,41 +77,42 @@ function getBeaufortColor(speed) {
   if (speed < 20.8) return 'crimson';
   return 'maroon';
 }
-function getArrowFromDeg(deg) {
-  const arrows = ['⬇️','↙️','⬅️','↖️','⬆️','↗️','➡️','↘️'];
-  return arrows[Math.round(deg / 45) % 8];
-}
 function getDirectionLabel(deg) {
   const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
   return dirs[Math.round(deg / 22.5) % 16];
 }
 function createForecastTable(times, speeds, dirs) {
-  const segments = [0, 8, 16];
-  return segments.map(start => {
-    const end = start + 8;
-    const hours = times.slice(start, end).map(t => `<td>${t.slice(11, 16)}</td>`).join('');
-    const speedCells = speeds.slice(start, end).map(s => `<td style="color:${getBeaufortColor(s)}">${s.toFixed(1)}</td>`).join('');
-    const dirNums = dirs.slice(start, end).map(d => `<td>${Math.round(d)}°</td>`).join('');
-    const arrows = dirs.slice(start, end).map(d => `<td><span class="arrow">${getArrowFromDeg(d)}</span></td>`).join('');
-    return `
+  const output = [];
+  for (let block = 0; block < 2; block++) {
+    const start = block * 24;
+    const date = new Date(times[start]).toLocaleDateString('en-GB');
+    output.push(`<div class="text-center font-semibold text-sm text-gray-600">${date}</div>`);
+    for (let row = 0; row < 3; row++) {
+      const from = start + row * 8;
+      const to = from + 8;
+      const hours = times.slice(from, to).map(t => `<td>${t.slice(11, 16)}</td>`).join('');
+      const speedCells = speeds.slice(from, to).map(s => `<td style="color:${getBeaufortColor(s)}">${s.toFixed(1)}</td>`).join('');
+      const dirNums = dirs.slice(from, to).map(d => `<td>${Math.round(d)}°</td>`).join('');
+      output.push(`
       <table class="wind-table table-auto w-full mt-2 text-xs">
         <thead><tr class="font-semibold text-gray-700">${hours}</tr></thead>
         <tbody>
           <tr>${speedCells}</tr>
           <tr>${dirNums}</tr>
-          <tr>${arrows}</tr>
         </tbody>
       </table>
-      <div class="divider"></div>`;
-  }).join('');
+      <div class="divider"></div>`);
+    }
+  }
+  return output.join('');
 }
 function fetchOpenMeteoTable() {
   fetch("https://api.open-meteo.com/v1/forecast?latitude=10.521978&longitude=107.014553&hourly=wind_speed_10m,wind_direction_10m&timezone=Asia%2FBangkok")
     .then(res => res.json())
     .then(data => {
-      const times = data.hourly.time.slice(0, 24);
-      const speeds = data.hourly.wind_speed_10m.slice(0, 24).map(kmh => (kmh * 0.539957));
-      const dirs = data.hourly.wind_direction_10m.slice(0, 24);
+      const times = data.hourly.time.slice(0, 48);
+      const speeds = data.hourly.wind_speed_10m.slice(0, 48).map(kmh => (kmh * 0.539957));
+      const dirs = data.hourly.wind_direction_10m.slice(0, 48);
       document.getElementById('openMeteoTables').innerHTML = createForecastTable(times, speeds, dirs);
       document.getElementById('infoMeteo').innerText = 'Data updated at: ' + new Date().toLocaleTimeString();
     });
@@ -150,7 +148,7 @@ function fetchWindData(station, suffix, datasetIndex) {
     .then(json => {
       const last = JSON.parse(json.channel.last_values);
       const rawSpeed = parseFloat(last[station.speedField].value);
-      const speed = rawSpeed * 1.85;
+      const speed = rawSpeed * 1.75;
       const knots = speed * 1.94384;
       const now = new Date().toLocaleTimeString();
       const level = getBeaufortColor(speed);
